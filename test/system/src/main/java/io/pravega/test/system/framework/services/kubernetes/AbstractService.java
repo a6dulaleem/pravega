@@ -39,6 +39,7 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 import static io.pravega.common.Exceptions.checkNotNullOrEmpty;
+import static io.pravega.test.system.framework.Utils.PRAVEGA_PROPERTIES;
 import static java.util.Collections.singletonList;
 
 @Slf4j
@@ -177,13 +178,26 @@ public abstract class AbstractService implements Service {
         return builder.build();
     }
 
-    protected static Map<String, Object> buildPatchedPravegaClusterSpec(String service, int replicaCount, String component) {
+    protected Map<String, Object> buildPatchedPravegaClusterSpec(String service, int replicaCount, String component) {
 
+        final Map<String, Object> pravegaPersistentVolumeSpec = getPersistentVolumeClaimSpec("20Gi", "standard");
+        final String pravegaImg = DOCKER_REGISTRY + PREFIX + "/" + PRAVEGA_IMAGE_NAME;
+        final Map<String, Object> pravegaImgSpec;
+
+        pravegaImgSpec = ImmutableMap.of("repository", pravegaImg);
         log.info("<<DEBUG>> service {}, replica count {}, component{}",service,replicaCount, component);
         final Map<String, Object> componentSpec = ImmutableMap.<String, Object>builder()
                 .put(service, replicaCount)
+                .put("segmentStoreReplicas", DEFAULT_SEGMENTSTORE_COUNT)
+                .put("debugLogging", true)
+                .put("cacheVolumeClaimTemplate", pravegaPersistentVolumeSpec)
                 .put("controllerResources", getResources("2000m", "2Gi", "1000m", "2Gi"))
                 .put("segmentStoreResources", getResources("2000m", "6Gi", "1000m", "6Gi"))
+                .put("options", PRAVEGA_PROPERTIES)
+                .put("image", pravegaImgSpec)
+                .put("longtermStorage", tier2Spec())
+                .put("segmentStoreJVMOptions", getSegmentStoreJVMOptions())
+                .put("controllerjvmOptions", getControllerJVMOptions())
                 .build();
 
         return ImmutableMap.<String, Object>builder()
@@ -279,7 +293,7 @@ public abstract class AbstractService implements Service {
                 .build()).build();
     }
 
-    private static Map<String, Object> getResources(String limitsCpu, String limitsMem, String requestsCpu, String requestsMem) {
+    private Map<String, Object> getResources(String limitsCpu, String limitsMem, String requestsCpu, String requestsMem) {
         return ImmutableMap.<String, Object>builder()
                 .put("limits", ImmutableMap.builder()
                         .put("cpu", limitsCpu)
