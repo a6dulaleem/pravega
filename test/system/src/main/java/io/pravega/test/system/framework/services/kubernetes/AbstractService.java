@@ -182,6 +182,8 @@ public abstract class AbstractService implements Service {
         log.info("<<DEBUG>> service {}, replica count {}, component{}",service,replicaCount, component);
         final Map<String, Object> componentSpec = ImmutableMap.<String, Object>builder()
                 .put(service, replicaCount)
+                .put("controllerResources", getResources("2000m", "2Gi", "1000m", "2Gi"))
+                .put("segmentStoreResources", getResources("2000m", "6Gi", "1000m", "6Gi"))
                 .build();
 
         return ImmutableMap.<String, Object>builder()
@@ -277,7 +279,7 @@ public abstract class AbstractService implements Service {
                 .build()).build();
     }
 
-    private Map<String, Object> getResources(String limitsCpu, String limitsMem, String requestsCpu, String requestsMem) {
+    private static Map<String, Object> getResources(String limitsCpu, String limitsMem, String requestsCpu, String requestsMem) {
         return ImmutableMap.<String, Object>builder()
                 .put("limits", ImmutableMap.builder()
                         .put("cpu", limitsCpu)
