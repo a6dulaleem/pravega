@@ -342,9 +342,9 @@ public class K8sClient {
                                         plural,
                                         name,
                                         request,
-                                        "all",
-                                        "force",
-                                        false,
+                                        "All",
+                                        "kubectl",
+                                        true,
                                         cb1),
                                 V1Patch.PATCH_FORMAT_JSON_MERGE_PATCH);
                         return cb1.getFuture();
