@@ -323,7 +323,7 @@ public class K8sClient {
      * @return A Future representing the status of create/update.
      */
     @SuppressWarnings("unchecked")
-    public CompletableFuture<Object> createAndUpdateCustomObject(String customResourceGroup, String version, String namespace,
+        public CompletableFuture<Object> createAndUpdateCustomObject(String customResourceGroup, String version, String namespace,
                                                                  String plural, Map<String, Object> request) {
         CustomObjectsApi api = new CustomObjectsApi();
         //Fetch the name of the custom object.
@@ -346,7 +346,7 @@ public class K8sClient {
                                         "kubectl",
                                         true,
                                         cb1),
-                                V1Patch.PATCH_FORMAT_JSON_MERGE_PATCH);
+                                V1Patch.PATCH_FORMAT_APPLY_YAML);
                         return cb1.getFuture();
                     } catch (ApiException e) {
                         throw Exceptions.sneakyThrow(e);
