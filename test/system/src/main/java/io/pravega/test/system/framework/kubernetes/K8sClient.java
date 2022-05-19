@@ -342,11 +342,11 @@ public class K8sClient {
                                         plural,
                                         name,
                                         request,
-                                        "All",
-                                        "kubectl",
-                                        true,
+                                        null,
+                                        null,
+                                        null,
                                         cb1),
-                                V1Patch.PATCH_FORMAT_APPLY_YAML);
+                                V1Patch.PATCH_FORMAT_JSON_MERGE_PATCH);
                         return cb1.getFuture();
                     } catch (ApiException e) {
                         throw Exceptions.sneakyThrow(e);
