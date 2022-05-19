@@ -354,6 +354,8 @@ public class K8sClient {
                 }).exceptionally(t -> {
                     log.warn("Exception while trying to fetch instance {} of custom resource {}, try to create it. Details: {}", name,
                             customResourceGroup, t.getMessage());
+                    log.warn("<<Debug>> Exception Cause {}", t.getCause());
+                    log.warn("<<Debug>> Stack trace {}", t.getStackTrace());
                     try {
                         //create object
                         K8AsyncCallback<Object> cb = new K8AsyncCallback<>("createCustomObject");
