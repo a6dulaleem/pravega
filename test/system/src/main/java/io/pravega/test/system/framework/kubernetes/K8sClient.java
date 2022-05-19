@@ -342,8 +342,8 @@ public class K8sClient {
                                         plural,
                                         name,
                                         request,
-                                        null,
-                                        null,
+                                        "all",
+                                        "force",
                                         false,
                                         cb1),
                                 V1Patch.PATCH_FORMAT_JSON_MERGE_PATCH);
