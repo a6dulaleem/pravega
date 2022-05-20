@@ -188,7 +188,6 @@ public abstract class AbstractService implements Service {
         log.info("<<DEBUG>> service {}, replica count {}, component{}",service,replicaCount, component);
         final Map<String, Object> componentSpec = ImmutableMap.<String, Object>builder()
                 .put(service, replicaCount)
-                .put("segmentStoreReplicas", DEFAULT_SEGMENTSTORE_COUNT)
                 .put("debugLogging", true)
                 .put("cacheVolumeClaimTemplate", pravegaPersistentVolumeSpec)
                 .put("controllerResources", getResources("2000m", "2Gi", "1000m", "2Gi"))
