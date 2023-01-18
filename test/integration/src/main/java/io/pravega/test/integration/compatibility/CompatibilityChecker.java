@@ -202,6 +202,7 @@ public class CompatibilityChecker {
     /**
      * This method is trying to create a stream and writing a couple of events.
      * Then deleting the newly created stream and validating it.
+     * This is temporory comments.
      */
     private void checkStreamDelete() {
         String scopeName = "stream-delete-test-scope";
