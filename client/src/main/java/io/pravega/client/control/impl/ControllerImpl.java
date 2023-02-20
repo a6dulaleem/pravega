@@ -899,6 +899,8 @@ public class ControllerImpl implements Controller {
         CancellableRequest<Boolean> cancellableRequest = new CancellableRequest<>();
         final long requestId = requestIdGenerator.get();
         long traceId = LoggerHelpers.traceEnter(log, "scaleStream", stream, requestId);
+        log.info("---------ANJU:  controller scaleStream  -----------");
+        log.debug("---------ANJU:  controller scaleStream -----------");
         startScaleInternal(stream, sealedSegments, newKeyRanges, SCALE_STREAM, requestId)
                 .whenCompleteAsync((startScaleResponse, e) -> {
                     if (e != null) {
@@ -1005,6 +1007,8 @@ public class ControllerImpl implements Controller {
         Preconditions.checkNotNull(stream, "stream");
         Preconditions.checkNotNull(sealedSegments, "sealedSegments");
         Preconditions.checkNotNull(newKeyRanges, "newKeyRanges");
+        log.info("---------ANJU:  controller startScaleInternal  -----------");
+        log.debug("---------ANJU:  controller startScaleInternal -----------");
 
         final CompletableFuture<ScaleResponse> result = this.retryConfig.runAsync(() -> {
             RPCAsyncCallback<ScaleResponse> callback = new RPCAsyncCallback<>(requestId, method, stream);
@@ -2222,6 +2226,9 @@ public class ControllerImpl implements Controller {
         }
 
         public void scale(ScaleRequest scaleRequest, RPCAsyncCallback<ScaleResponse> callback) {
+            log.info("---------ANJU:  controller scale  -----------");
+            log.debug("---------ANJU:  controller scale -----------");
+
             clientStub.withDeadlineAfter(timeoutMillis, TimeUnit.MILLISECONDS)
                       .scale(scaleRequest, callback);
         }

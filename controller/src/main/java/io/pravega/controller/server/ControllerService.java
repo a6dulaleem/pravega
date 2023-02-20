@@ -566,7 +566,8 @@ public class ControllerService {
         Exceptions.checkNotNullOrEmpty(stream, "stream");
         Preconditions.checkNotNull(segmentsToSeal, "sealedSegments");
         Preconditions.checkNotNull(newKeyRanges, "newKeyRanges");
-
+        log.info("---------ANJU:  controller Service scale START  -----------");
+        log.debug("---------ANJU:  controller Service scale START -----------");
         return streamMetadataTasks.manualScale(scope,
                                          stream,
                                          segmentsToSeal,

@@ -106,7 +106,8 @@ public class AutoScaleTest extends AbstractScaleTests {
         Map<Double, Double> keyRanges = new HashMap<>();
         keyRanges.put(0.0, 0.5);
         keyRanges.put(0.5, 1.0);
-
+        log.info("---------ANJU: Client controller scale segment START -----------");
+        log.debug("---------ANJU: Client controller scale segment START -----------");
         Boolean status = controller.scaleStream(new StreamImpl(SCOPE, SCALE_DOWN_STREAM_NAME),
                 Collections.singletonList(0L),
                 keyRanges,

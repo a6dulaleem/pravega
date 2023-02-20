@@ -1077,6 +1077,8 @@ public abstract class PersistentStreamBase implements Stream {
                                                                                    final long scaleTimestamp,
                                                                                    final VersionedMetadata<EpochTransitionRecord> existing,
                                                                                    OperationContext context) {
+        log.info("---------ANJU:  controller Service submitScale  START  -----------");
+        log.debug("---------ANJU:  controller Service submitScale START -----------");
         Preconditions.checkNotNull(context, "Operation context cannot be null");
         return verifyNotSealed(context).thenCompose(v -> {
             if (existing == null) {

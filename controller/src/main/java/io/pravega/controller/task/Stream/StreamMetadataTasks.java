@@ -1674,6 +1674,8 @@ public class StreamMetadataTasks extends TaskBase {
     public CompletableFuture<ScaleResponse> manualScale(String scope, String stream, List<Long> segmentsToSeal,
                                                         List<Map.Entry<Double, Double>> newRanges, long scaleTimestamp,
                                                         long requestId) {
+        log.info("---------ANJU:  controller Service manualScale  START  -----------");
+        log.debug("---------ANJU:  controller Service manualScale START -----------");
         final OperationContext context = streamMetadataStore.createStreamContext(scope, stream, requestId);
 
         ScaleOpEvent event = new ScaleOpEvent(scope, stream, segmentsToSeal, newRanges, true, scaleTimestamp,
@@ -1704,6 +1706,8 @@ public class StreamMetadataTasks extends TaskBase {
                                                 .collect(Collectors.toList()));
                                 response.setEpoch(startScaleResponse.getObject().getActiveEpoch());
                             }
+                            log.info("---------ANJU:  controller Service manualScale  END  -----------");
+                            log.debug("---------ANJU:  controller Service manualScale END -----------");
                             return response.build();
                         }));
     }
