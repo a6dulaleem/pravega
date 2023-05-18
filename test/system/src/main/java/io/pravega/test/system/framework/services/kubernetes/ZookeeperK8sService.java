@@ -41,16 +41,18 @@ public class ZookeeperK8sService extends AbstractService {
     private static final int DEFAULT_INSTANCE_COUNT = 1; // number of zk instances.
     private static final String ZOOKEEPER_IMAGE_NAME = System.getProperty("zookeeperImageName", "zookeeper");
     private static final String PRAVEGA_ZOOKEEPER_IMAGE_VERSION = System.getProperty("zookeeperImageVersion", "latest");
+    private ResourceWrapper resourceWrapper = null;
 
     public ZookeeperK8sService(String id) {
         super(id);
+        getSystemTestConfig();
     }
 
     @Override
     public void start(boolean wait) {
         Futures.getAndHandleExceptions(k8sClient.createAndUpdateCustomObject(CUSTOM_RESOURCE_GROUP, CUSTOM_RESOURCE_VERSION,
-                NAMESPACE, CUSTOM_RESOURCE_PLURAL,
-                getZookeeperDeployment(getID(), DEFAULT_INSTANCE_COUNT)),
+                        NAMESPACE, CUSTOM_RESOURCE_PLURAL,
+                        getZookeeperDeployment(getID(), DEFAULT_INSTANCE_COUNT)),
                 t -> new TestFrameworkException(RequestFailed, "Failed to deploy zookeeper operator/service", t));
         if (wait) {
             Futures.getAndHandleExceptions(k8sClient.waitUntilPodIsRunning(NAMESPACE, "app", getID(), DEFAULT_INSTANCE_COUNT),
@@ -62,7 +64,7 @@ public class ZookeeperK8sService extends AbstractService {
     @Override
     public void stop() {
         Futures.getAndHandleExceptions(k8sClient.deleteCustomObject(CUSTOM_RESOURCE_GROUP, CUSTOM_RESOURCE_VERSION, NAMESPACE, CUSTOM_RESOURCE_PLURAL, getID()),
-                                       t -> new TestFrameworkException(RequestFailed, "Failed to stop zookeeper service", t));
+                t -> new TestFrameworkException(RequestFailed, "Failed to stop zookeeper service", t));
     }
 
     @Override
@@ -73,25 +75,25 @@ public class ZookeeperK8sService extends AbstractService {
     public boolean isRunning() {
 
         return k8sClient.getStatusOfPodWithLabel(NAMESPACE, "app", getID())
-                        .thenApply(statuses -> statuses.stream()
-                                                      .filter(podStatus -> podStatus.getContainerStatuses()
-                                                                                    .stream()
-                                                                                    .allMatch(st -> st.getState().getRunning() != null))
-                                                      .count() * 2 - statuses.size())
-                        .thenApply(netCount -> netCount > 0)
-                        .exceptionally(t -> {
-                           log.warn("Exception observed while checking status of pod: {}. Details: {} ", getID(), t.getMessage());
-                           return false;
-                       }).join();
+                .thenApply(statuses -> statuses.stream()
+                        .filter(podStatus -> podStatus.getContainerStatuses()
+                                .stream()
+                                .allMatch(st -> st.getState().getRunning() != null))
+                        .count() * 2 - statuses.size())
+                .thenApply(netCount -> netCount > 0)
+                .exceptionally(t -> {
+                    log.warn("Exception observed while checking status of pod: {}. Details: {} ", getID(), t.getMessage());
+                    return false;
+                }).join();
     }
 
     @Override
     public List<URI> getServiceDetails() {
         // Fetch the URI.
         return Futures.getAndHandleExceptions(k8sClient.getStatusOfPodWithLabel(NAMESPACE, "app", getID())
-                                                       .thenApply(statuses -> statuses.stream().map(s -> URI.create(TCP + s.getPodIP() + ":" + ZKPORT))
-                                                                                     .collect(Collectors.toList())),
-                                              t -> new TestFrameworkException(RequestFailed, "Failed to fetch ServiceDetails for Zookeeper", t));
+                        .thenApply(statuses -> statuses.stream().map(s -> URI.create(TCP + s.getPodIP() + ":" + ZKPORT))
+                                .collect(Collectors.toList())),
+                t -> new TestFrameworkException(RequestFailed, "Failed to fetch ServiceDetails for Zookeeper", t));
     }
 
     @Override
@@ -99,8 +101,8 @@ public class ZookeeperK8sService extends AbstractService {
         // Update the instance count.
         // Request operator to deploy zookeeper nodes.
         return k8sClient.createAndUpdateCustomObject(CUSTOM_RESOURCE_GROUP, CUSTOM_RESOURCE_VERSION, NAMESPACE, CUSTOM_RESOURCE_PLURAL,
-                                                     getZookeeperDeployment(getID(), instanceCount))
-                        .thenCompose(v -> k8sClient.waitUntilPodIsRunning(NAMESPACE, "app", getID(), instanceCount));
+                        getZookeeperDeployment(getID(), instanceCount))
+                .thenCompose(v -> k8sClient.waitUntilPodIsRunning(NAMESPACE, "app", getID(), instanceCount));
     }
 
     private Map<String, Object> getZookeeperDeployment(final String deploymentName, final int clusterSize) {
@@ -109,23 +111,11 @@ public class ZookeeperK8sService extends AbstractService {
                 .put("kind", CUSTOM_RESOURCE_KIND)
                 .put("metadata", ImmutableMap.of("name", deploymentName))
                 .put("spec", ImmutableMap.builder().put("image",  getImageSpec(DOCKER_REGISTRY + PREFIX + "/" + ZOOKEEPER_IMAGE_NAME, PRAVEGA_ZOOKEEPER_IMAGE_VERSION))
-                                         .put("replicas", clusterSize)
-                                         .put("persistence", ImmutableMap.of("reclaimPolicy", "Delete"))
-                                         .put("pod", ImmutableMap.of("resources", getZookeeperResources()))
-                                         .build())
+                        .put("replicas", clusterSize)
+                        .put("persistence", ImmutableMap.of("reclaimPolicy", "Delete"))
+                        .put("pod", ImmutableMap.of("resources", resourceWrapper.getZookeeperProperties().getZookeeperResources()))
+                        .build())
                 .build();
     }
 
-    private Map<String, Object> getZookeeperResources() {
-        return ImmutableMap.<String, Object>builder()
-                           .put("limits", ImmutableMap.builder()
-                                                      .put("cpu", "400m")
-                                                      .put("memory", "2Gi")
-                                                      .build())
-                           .put("requests", ImmutableMap.builder()
-                                                        .put("cpu", "200m")
-                                                        .put("memory", "1Gi")
-                                                        .build())
-                           .build();
-    }
 }

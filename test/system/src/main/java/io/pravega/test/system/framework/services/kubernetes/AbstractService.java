@@ -15,6 +15,10 @@
  */
 package io.pravega.test.system.framework.services.kubernetes;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.introspect.VisibilityChecker;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableMap;
 import io.kubernetes.client.openapi.models.V1Secret;
@@ -28,12 +32,14 @@ import io.pravega.test.system.framework.kubernetes.K8sClient;
 import io.pravega.test.system.framework.services.Service;
 
 import org.apache.commons.io.IOUtils;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -47,6 +53,7 @@ public abstract class AbstractService implements Service {
 
     public static final int CONTROLLER_GRPC_PORT = 9090;
     public static final int CONTROLLER_REST_PORT = 10080;
+    public static final String SYSTEMTESTPROPERTIES = "systemTestConfig.json";
     protected static final String DOCKER_REGISTRY =  System.getProperty("dockerRegistryUrl", "");
     protected static final String PREFIX = System.getProperty("imagePrefix", "pravega");
     protected static final String TCP = "tcp://";
@@ -86,13 +93,12 @@ public abstract class AbstractService implements Service {
     private static final String TIER2_TYPE = System.getProperty("tier2Type", TIER2_NFS);
     private static final String BOOKKEEPER_VERSION = System.getProperty("bookkeeperImageVersion", "latest");
     private static final String ZK_SERVICE_NAME = "zookeeper-client:2181";
-    private static final String JOURNALDIRECTORIES = "/bk/journal/j0,/bk/journal/j1,/bk/journal/j2,/bk/journal/j3";
-    private static final String LEDGERDIRECTORIES = "/bk/ledgers/l0,/bk/ledgers/l1,/bk/ledgers/l2,/bk/ledgers/l3";
-
     final K8sClient k8sClient;
     private final String id;
+    private ResourceWrapper resourceWrapper = null;
 
     AbstractService(final String id) {
+        getSystemTestConfig();
         this.k8sClient = ClientFactory.INSTANCE.getK8sClient();
         this.id = id;
     }
@@ -110,28 +116,30 @@ public abstract class AbstractService implements Service {
         return registerTLSSecret()
                 .thenCompose(v -> k8sClient.createSecret(NAMESPACE, authSecret()))
                 .thenCompose(v -> k8sClient.createAndUpdateCustomObject(CUSTOM_RESOURCE_GROUP_PRAVEGA, CUSTOM_RESOURCE_VERSION_PRAVEGA,
-                NAMESPACE, CUSTOM_RESOURCE_PLURAL_PRAVEGA,
-                getPravegaOnlyDeployment(zkUri.getAuthority(),
-                controllerCount,
-                segmentStoreCount,
-                props)));
+                        NAMESPACE, CUSTOM_RESOURCE_PLURAL_PRAVEGA,
+                        getPravegaOnlyDeployment(zkUri.getAuthority(),
+                                controllerCount,
+                                segmentStoreCount,
+                                ImmutableMap.copyOf(resourceWrapper.getPravegaOptions()))));
     }
 
     private Map<String, Object> getPravegaOnlyDeployment(String zkLocation, int controllerCount, int segmentStoreCount, ImmutableMap<String, String> props) {
         // generate Pravega Spec.
-        final Map<String, Object> pravegaPersistentVolumeSpec = getPersistentVolumeClaimSpec("20Gi", "standard");
         final String pravegaImg = DOCKER_REGISTRY + PREFIX + "/" + PRAVEGA_IMAGE_NAME;
         final Map<String, Object> pravegaImgSpec;
 
-         pravegaImgSpec = ImmutableMap.of("repository", pravegaImg);
+        pravegaImgSpec = ImmutableMap.of("repository", pravegaImg);
 
         final Map<String, Object> pravegaSpec = ImmutableMap.<String, Object>builder().put("controllerReplicas", controllerCount)
                 .put("segmentStoreReplicas", segmentStoreCount)
                 .put("debugLogging", true)
-                .put("cacheVolumeClaimTemplate", pravegaPersistentVolumeSpec)
-                .put("controllerResources", getResources("2000m", "2Gi", "1000m", "2Gi"))
-                .put("segmentStoreResources", getResources("2000m", "6Gi", "1000m", "6Gi"))
-                .put("options", props)
+                .put("cacheVolumeClaimTemplate", getPersistentVolumeClaimSpec(resourceWrapper.getZookeeperProperties().getPersistentVolumeClaim().get("storageClassName"),
+                        resourceWrapper.getZookeeperProperties().getPersistentVolumeClaim().get("volumeSize")))
+                .put("controllerResources", getResources(resourceWrapper.getControllerProperties().getControllerResources().getLimits().get("cpu"),
+                        resourceWrapper.getControllerProperties().getControllerResources().getLimits().get("memory"), resourceWrapper.getControllerProperties().getControllerResources().getRequests().get("cpu"),
+                        resourceWrapper.getControllerProperties().getControllerResources().getRequests().get("memory")))
+                .put("segmentStoreResources", resourceWrapper.getSegmentStoreProperties().getSegmentStoreResources())
+                .put("options", resourceWrapper.getPravegaOptions())
                 .put("image", pravegaImgSpec)
                 .put("longtermStorage", tier2Spec())
                 .put("segmentStoreJVMOptions", getSegmentStoreJVMOptions())
@@ -214,7 +222,7 @@ public abstract class AbstractService implements Service {
         log.info("Loading tier2Type = {}", TIER2_TYPE);
         if (TIER2_TYPE.equalsIgnoreCase(TIER2_NFS)) {
             spec = ImmutableMap.of("filesystem", ImmutableMap.of("persistentVolumeClaim",
-                                                                 ImmutableMap.of("claimName", "pravega-tier2")));
+                    ImmutableMap.of("claimName", "pravega-tier2")));
         } else if (TIER2_TYPE.equalsIgnoreCase("custom")) {
             spec = getCustomTier2Config();
         } else {
@@ -227,9 +235,9 @@ public abstract class AbstractService implements Service {
     private Map<String, Object> getCustomTier2Config() {
         return ImmutableMap.of("custom",
                 ImmutableMap.<String, Object>builder()
-                .put("options", getTier2Config())
-                .put("env", getTier2Env())
-                .build());
+                        .put("options", getTier2Config())
+                        .put("env", getTier2Env())
+                        .build());
     }
 
     private Map<String, Object> getTier2Config() {
@@ -258,15 +266,15 @@ public abstract class AbstractService implements Service {
     // Removal of the JVM option 'UseCGroupMemoryLimitForHeap' is required with JVM environments >= 10. This option
     // is supplied by default by the operators. We cannot 'deactivate' it using the XX:- counterpart as it is unrecognized.
     private String[] getSegmentStoreJVMOptions() {
-        return new String[]{"-XX:+UseContainerSupport", "-XX:+IgnoreUnrecognizedVMOptions", "-XX:MaxDirectMemorySize=4g", "-Xmx1024m"};
+        return resourceWrapper.getSegmentStoreProperties().getSegmentStoreJVMOptions();
     }
 
     private String[] getControllerJVMOptions() {
-        return new String[]{"-XX:+UseContainerSupport", "-XX:+IgnoreUnrecognizedVMOptions", "-Xmx1024m"};
+        return resourceWrapper.getControllerProperties().getControllerJVMOptions();
     }
 
-    private String[] getBookkeeperMemoryOptions() {
-        return new String[]{"-XX:+UseContainerSupport", "-XX:+IgnoreUnrecognizedVMOptions", "-Xmx1024m"};
+    private List<String> getBookkeeperMemoryOptions() {
+        return resourceWrapper.getBookkeeperProperties().getBookkeeperJVMOptions().get("memoryOptions");
     }
 
 
@@ -357,13 +365,13 @@ public abstract class AbstractService implements Service {
                         NAMESPACE, CUSTOM_RESOURCE_PLURAL_BOOKKEEPER,
                         getBookkeeperDeployment(zkUri.getAuthority(),
                                 bookieCount,
-                                props)));
+                                ImmutableMap.copyOf(resourceWrapper.getPravegaOptions()))));
     }
 
     private V1ConfigMap getBookkeeperOperatorConfigMap() {
-            Map<String, String>  dataMap = new HashMap<>();
-            dataMap.put("PRAVEGA_CLUSTER_NAME", PRAVEGA_ID);
-            dataMap.put("WAIT_FOR", ZK_SERVICE_NAME);
+        Map<String, String>  dataMap = new HashMap<>();
+        dataMap.put("PRAVEGA_CLUSTER_NAME", PRAVEGA_ID);
+        dataMap.put("WAIT_FOR", ZK_SERVICE_NAME);
 
         return new V1ConfigMap().apiVersion("v1")
                 .kind("ConfigMap")
@@ -373,22 +381,23 @@ public abstract class AbstractService implements Service {
 
     private Map<String, Object> getBookkeeperDeployment(String zkLocation, int bookieCount, ImmutableMap<String, String> props) {
         // generate BookkeeperSpec.
-        final Map<String, Object> bkPersistentVolumeSpec = getPersistentVolumeClaimSpec("10Gi", "standard");
         final Map<String, Object> bookkeeperSpec = ImmutableMap.<String, Object>builder().put("image", getBookkeeperImageSpec(DOCKER_REGISTRY + PREFIX + "/" + BOOKKEEPER_IMAGE_NAME))
                 .put("replicas", bookieCount)
                 .put("version", BOOKKEEPER_VERSION)
-                .put("resources", getResources("2000m", "5Gi", "1000m", "3Gi"))
+                .put("resources", getResources(resourceWrapper.getBookkeeperProperties().getBookkeeperResources().getLimits().get("cpu"),
+                        resourceWrapper.getBookkeeperProperties().getBookkeeperResources().getLimits().get("memory"), resourceWrapper.getBookkeeperProperties().getBookkeeperResources().getRequests().get("cpu"),
+                        resourceWrapper.getBookkeeperProperties().getBookkeeperResources().getRequests().get("memory")))
                 .put("storage", ImmutableMap.builder()
-                        .put("indexVolumeClaimTemplate", bkPersistentVolumeSpec)
-                        .put("ledgerVolumeClaimTemplate", bkPersistentVolumeSpec)
-                        .put("journalVolumeClaimTemplate", bkPersistentVolumeSpec)
+                        .put("index", resourceWrapper.getBookkeeperProperties().getBookkeeperStorage().getIndex())
+                        .put("ledger", resourceWrapper.getBookkeeperProperties().getBookkeeperStorage().getLedger())
+                        .put("journal", resourceWrapper.getBookkeeperProperties().getBookkeeperStorage().getJournal())
                         .build())
 
                 .put("envVars", CONFIG_MAP_BOOKKEEPER)
                 .put("zookeeperUri", zkLocation)
                 .put("autoRecovery", true)
-                .put("options", ImmutableMap.builder()  .put("journalDirectories", JOURNALDIRECTORIES)
-                        .put("ledgerDirectories", LEDGERDIRECTORIES)
+                .put("options", ImmutableMap.builder()  .put("journalDirectories", resourceWrapper.getBookkeeperProperties().getBookkeeperOptions().get("journalDirectories"))
+                        .put("ledgerDirectories", resourceWrapper.getBookkeeperProperties().getBookkeeperOptions().get("ledgerDirectories"))
                         .build())
                 .put("jvmOptions", ImmutableMap.builder()
                         .put("memoryOpts", getBookkeeperMemoryOptions())
@@ -423,6 +432,37 @@ public abstract class AbstractService implements Service {
                         .put(service, replicaCount)
                         .build())
                 .build();
+    }
+
+    public void getSystemTestConfig() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        objectMapper.setVisibility(VisibilityChecker.Std.defaultInstance().withFieldVisibility(JsonAutoDetect.Visibility.ANY));
+        objectMapper.enable(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY);
+        // Get the current directory
+        String currentDirectory = System.getProperty("user.dir");
+
+        // Create a File object for the current directory
+        File directory = new File(currentDirectory);
+
+        // Get the list of files in the current directory
+        File[] files = directory.listFiles();
+
+        // Iterate over the files and print their names
+        if (files != null) {
+            for (File file : files) {
+                System.out.println(file.getName());
+            }
+        }
+        InputStream stream = AbstractService.class.getClassLoader().getResourceAsStream(SYSTEMTESTPROPERTIES);
+//        File file = new File(SYSTEMTESTPROPERTIES);
+        try {
+            log.info("*******" + SYSTEMTESTPROPERTIES);
+            resourceWrapper = objectMapper.readValue(stream, ResourceWrapper.class);
+            log.info("*******" + resourceWrapper.getControllerProperties().getControllerResources().getRequests().get("cpu"));
+        } catch (IOException e) {
+            log.error("Input json file not available", e);
+        }
     }
 
     @Override
