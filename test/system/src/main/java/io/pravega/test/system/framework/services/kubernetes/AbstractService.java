@@ -15,10 +15,6 @@
  */
 package io.pravega.test.system.framework.services.kubernetes;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.introspect.VisibilityChecker;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableMap;
 import io.kubernetes.client.openapi.models.V1Secret;
@@ -32,7 +28,6 @@ import io.pravega.test.system.framework.kubernetes.K8sClient;
 import io.pravega.test.system.framework.services.Service;
 
 import org.apache.commons.io.IOUtils;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -53,7 +48,7 @@ public abstract class AbstractService implements Service {
 
     public static final int CONTROLLER_GRPC_PORT = 9090;
     public static final int CONTROLLER_REST_PORT = 10080;
-    public static final String SYSTEMTESTPROPERTIES = "systemTestConfig.json";
+    public static final String SYSTEMTESTCONFIG = "systemTestConfig.json";
     protected static final String DOCKER_REGISTRY =  System.getProperty("dockerRegistryUrl", "");
     protected static final String PREFIX = System.getProperty("imagePrefix", "pravega");
     protected static final String TCP = "tcp://";
@@ -95,10 +90,9 @@ public abstract class AbstractService implements Service {
     private static final String ZK_SERVICE_NAME = "zookeeper-client:2181";
     final K8sClient k8sClient;
     private final String id;
-    private ResourceWrapper resourceWrapper = null;
+    private ResourceWrapper resourceWrapper = ResourceWrapper.fromJSON(SYSTEMTESTCONFIG);
 
     AbstractService(final String id) {
-        getSystemTestConfig();
         this.k8sClient = ClientFactory.INSTANCE.getK8sClient();
         this.id = id;
     }
@@ -113,6 +107,7 @@ public abstract class AbstractService implements Service {
             log.info("Skipping PravegaCluster installation.");
             return CompletableFuture.completedFuture(null);
         }
+        log.info("<<<<<<<<<<<<<<<<<<<<<<<<<<<GET PRAVEGA OPTIONS>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", resourceWrapper.getPravegaOptions());
         return registerTLSSecret()
                 .thenCompose(v -> k8sClient.createSecret(NAMESPACE, authSecret()))
                 .thenCompose(v -> k8sClient.createAndUpdateCustomObject(CUSTOM_RESOURCE_GROUP_PRAVEGA, CUSTOM_RESOURCE_VERSION_PRAVEGA,
@@ -129,6 +124,11 @@ public abstract class AbstractService implements Service {
         final Map<String, Object> pravegaImgSpec;
 
         pravegaImgSpec = ImmutableMap.of("repository", pravegaImg);
+        log.info("<<<<<<<<<<<<<<<<<<<<<<<<<<<storageClassName>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", resourceWrapper.getZookeeperProperties().getPersistentVolumeClaim().get("storageClassName"));
+        log.info("<<<<<<<<<<<<<<<<<<<<<<<<<<<volumeSize>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", resourceWrapper.getZookeeperProperties().getPersistentVolumeClaim().get("volumeSize"));
+        log.info("<<<<<<<<<<<<<<<<<<<<<<<<<<<memory>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", resourceWrapper.getControllerProperties().getControllerResources().getLimits().get("memory"));
+        log.info("<<<<<<<<<<<<<<<<<<<<<<<<<<<segment resources>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", resourceWrapper.getSegmentStoreProperties().getSegmentStoreResources());
+        log.info("<<<<<<<<<<<<<<<<<<<<<<<<<<<pravega options>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>",  resourceWrapper.getPravegaOptions());
 
         final Map<String, Object> pravegaSpec = ImmutableMap.<String, Object>builder().put("controllerReplicas", controllerCount)
                 .put("segmentStoreReplicas", segmentStoreCount)
@@ -432,37 +432,6 @@ public abstract class AbstractService implements Service {
                         .put(service, replicaCount)
                         .build())
                 .build();
-    }
-
-    public void getSystemTestConfig() {
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-        objectMapper.setVisibility(VisibilityChecker.Std.defaultInstance().withFieldVisibility(JsonAutoDetect.Visibility.ANY));
-        objectMapper.enable(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY);
-        // Get the current directory
-        String currentDirectory = System.getProperty("user.dir");
-
-        // Create a File object for the current directory
-        File directory = new File(currentDirectory);
-
-        // Get the list of files in the current directory
-        File[] files = directory.listFiles();
-
-        // Iterate over the files and print their names
-        if (files != null) {
-            for (File file : files) {
-                System.out.println(file.getName());
-            }
-        }
-        InputStream stream = AbstractService.class.getClassLoader().getResourceAsStream(SYSTEMTESTPROPERTIES);
-//        File file = new File(SYSTEMTESTPROPERTIES);
-        try {
-            log.info("*******" + SYSTEMTESTPROPERTIES);
-            resourceWrapper = objectMapper.readValue(stream, ResourceWrapper.class);
-            log.info("*******" + resourceWrapper.getControllerProperties().getControllerResources().getRequests().get("cpu"));
-        } catch (IOException e) {
-            log.error("Input json file not available", e);
-        }
     }
 
     @Override

@@ -38,14 +38,15 @@ public class ZookeeperK8sService extends AbstractService {
     private static final String CUSTOM_RESOURCE_VERSION = "v1beta1";
     private static final String CUSTOM_RESOURCE_PLURAL = "zookeeperclusters";
     private static final String CUSTOM_RESOURCE_KIND = "ZookeeperCluster";
+    private static final String SYSTEMTESTCONFIG = "systemTestConfig.json";
+
     private static final int DEFAULT_INSTANCE_COUNT = 1; // number of zk instances.
     private static final String ZOOKEEPER_IMAGE_NAME = System.getProperty("zookeeperImageName", "zookeeper");
     private static final String PRAVEGA_ZOOKEEPER_IMAGE_VERSION = System.getProperty("zookeeperImageVersion", "latest");
-    private ResourceWrapper resourceWrapper = null;
+    private ResourceWrapper resourceWrapper = ResourceWrapper.fromJSON(SYSTEMTESTCONFIG);
 
     public ZookeeperK8sService(String id) {
         super(id);
-        getSystemTestConfig();
     }
 
     @Override
