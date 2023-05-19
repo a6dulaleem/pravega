@@ -274,7 +274,7 @@ public abstract class AbstractService implements Service {
     }
 
     private List<String> getBookkeeperMemoryOptions() {
-        return resourceWrapper.getBookkeeperProperties().getBookkeeperJVMOptions().get("memoryOptions");
+        return resourceWrapper.getBookkeeperProperties().getBookkeeperJVMOptions().get("memoryOpts");
     }
 
 
