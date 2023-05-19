@@ -79,7 +79,7 @@
       }
     },
     "persistentVolumeClaim": {
-      "storageClassName": "",
+      "storageClassName": "standard",
       "volumeSize": "20Gi"
     }
   },
